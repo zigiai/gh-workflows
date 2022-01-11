@@ -83,6 +83,8 @@ jobs:
       username: ${{ steps.set.outputs.username }}
       push: ${{ steps.set.outputs.push }}
     steps:
+      - run: |
+          echo '${{ inputs.gcloud-auth }}'
       -
         uses: actions/github-script@v5
         id: set
