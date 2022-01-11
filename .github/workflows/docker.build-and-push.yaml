@@ -77,6 +77,9 @@ on:
       version:
         description: Docker image version (a tag)
         value: ${{ jobs.build.outputs.version }}
+      published:
+        description: Specifies whether docker image has been published on the registry
+        value: ${{ jobs.build.outputs.published }}
 
 jobs:
   pre:
@@ -141,6 +144,7 @@ jobs:
 
     outputs:
       version: ${{ steps.meta.outputs.version }}
+      published: ${{ steps.meta.outcome.published }}
 
     steps:
       - uses: actions/checkout@v2
@@ -180,7 +184,9 @@ jobs:
       -
         if: needs.pre.outputs.push == 'true' && needs.pre.outputs.self-hosted == 'true' && inputs.gcloud-auth
         run: gcloud auth configure-docker --quiet
-      - name: Build and push
+      -
+        id: build
+        name: Build and push
         uses: docker/build-push-action@v2
         with:
           context: ${{ inputs.context }}
@@ -196,6 +202,13 @@ jobs:
           cache-to: type=local,dest=/tmp/.buildx-cache-new
           secrets: ${{ secrets.secrets }}
           secret-files: ${{ inputs.secrets }}
+      -
+        if: always()
+        id: outcome
+        uses: actions/github-script@v5
+        with:
+          script: |
+            core.setOutput('published', ${{ steps.build.outcome == 'success' && needs.pre.outputs.push == 'true' }})
       - # Temp fix
         # https://github.com/docker/build-push-action/issues/252
         # https://github.com/moby/buildkit/issues/1896
