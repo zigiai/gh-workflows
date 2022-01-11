@@ -161,14 +161,14 @@ jobs:
           restore-keys: |-
             ${{ runner.os }}-buildx-${{ github.event.before }}
       -
-        if: needs.pre.outputs.push == 'true' && inputs.gcloud-auth != true
+        if: needs.pre.outputs.push == 'true' && inputs.gcloud-auth != 'true'
         uses: docker/login-action@v1
         with:
           registry: ${{ needs.pre.outputs.registry }}
           username: ${{ needs.pre.outputs.username }}
           password: ${{ secrets.password }}
       -
-        if: needs.pre.outputs.push == 'true' && inputs.gcloud-auth == true
+        if: inputs.gcloud-auth == 'true'
         run: gcloud auth configure-docker --quiet
       -
         name: Build and push
