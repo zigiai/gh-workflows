@@ -81,13 +81,14 @@ on:
 jobs:
   pre:
     name: Prepare
-    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.set.outputs.image }}
       registry: ${{ steps.set.outputs.registry }}
       username: ${{ steps.set.outputs.username }}
       push: ${{ steps.set.outputs.push }}
       self-hosted: ${{ steps.set.outputs.push }}
+      runs-on: ${{ steps.set.outputs.runs-on }}
     steps:
       - uses: actions/github-script@v5
         id: set
@@ -99,15 +100,18 @@ jobs:
             const repoPaths = '${{ inputs.repository }}'.split('/')
             const push = '${{ inputs.push-on-tags && startsWith(github.ref, 'refs/tags/') || inputs.push }}'
 
-            // selfHosted mode is set when runs-on is a list
-            let selfHosted = false
-            if (typeof(JSON.parse('${{ inputs.runs-on }}')) != "string") {
-              selfHosted = true
+            // safe-escape escape hosted runner
+            let runsOn = '${{ inputs.runs-on }}'
+            let selfHosted = true
+            if ('${{ inputs.runs-on }}'.trim().match(/^(\w|[-.])+$/)) {
+              runsOn = '"${{ inputs.runs-on }}"'
+              selfHosted = false
             }
-
-            let imageRegistry = ''
+            core.setOutput('runs-on', runsOn)
+            core.setOutput('self-hosted', selfHosted)
 
             // input repository first path part looks like an URL (ex. gcr.io which contains .)
+            let imageRegistry = ''
             if ((repoPaths[0] || '').split('.').length > 1) {
               imageRegistry = repoPaths[0]
             }
@@ -121,7 +125,6 @@ jobs:
             core.setOutput('image', imagePaths.join('/'))
             core.setOutput('registry', imageRegistry)
             core.setOutput('push', push)
-            core.setOutput('self-hosted', selfHosted)
 
             // autoset username for GCR
             if (imageRegistry.endsWith('gcr.io')) {
@@ -133,8 +136,8 @@ jobs:
 
   build:
     name: Build and Push
-    runs-on: ${{ fromJSON(inputs.runs-on) }}
     needs: [pre]
+    runs-on: ${{ fromJSON(needs.pre.outputs.runs-on) }}
 
     outputs:
       version: ${{ steps.meta.outputs.version }}
