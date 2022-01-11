@@ -10,6 +10,11 @@ on:
         description: Helmfile release name to deploy (equal github repository name by default)
         required: false
         type: string
+      deploy:
+        description: Specify whether to deploy, i.e. perform the release
+        required: false
+        default: false
+        type: boolean
       tag:
         description: Helmfile release tag to deploy
         required: true
@@ -23,11 +28,6 @@ on:
         required: false
         default: 20
         type: number
-      runs-on:
-        description: Specifies runs-on for the workflow jobs
-        default: ubuntu-latest
-        required: false
-        type: string
       helm-infra-ref:
         description: Specifies helm-infra ref
         default: master
@@ -41,14 +41,13 @@ on:
 jobs:
   pre:
     name: Prepare
-    runs-on: ubuntu-latest
-
+    runs-on: [self-hosted, stage]
     outputs:
       release: ${{ steps.set.outputs.release }}
       self-hosted: ${{ steps.set.outputs.push }}
-      runs-on: ${{ steps.set.outputs.runs-on }}
       jobOutcomes: ${{ steps.set.outputs.jobOutcomes }}
       environment: ${{ steps.envmap.outputs.environment }}
+      runner: ${{ steps.envmap.outputs.runner }}
 
     steps:
       -
@@ -61,8 +60,9 @@ jobs:
           mode: overwrite
           map: |
             {
+              ".*": { "runner": "stage" },
               "^refs/heads/development$": { "environment": "stage" },
-              "^refs/tags/v[0-9]+.[0-9]+.[0-9]+(-.*)?$": { "environment": "prod" }
+              "^refs/tags/v[0-9]+.[0-9]+.[0-9]+(-.*)?$": { "environment": "prod", "runner": "prod" }
             }
       -
         uses: actions/github-script@v5
@@ -73,16 +73,6 @@ jobs:
             const releaseName = '${{ inputs.release || github.event.repository.name }}'.toLowerCase()
             core.setOutput('release', releaseName)
 
-            // safe-escape escape hosted runner
-            let runsOn = '${{ inputs.runs-on }}'
-            let selfHosted = true
-            if ('${{ inputs.runs-on }}'.trim().match(/^(\w|[-.])+$/)) {
-              runsOn = '"${{ inputs.runs-on }}"'
-              selfHosted = false
-            }
-            core.setOutput('runs-on', runsOn)
-            core.setOutput('self-hosted', selfHosted)
-
             // job outcomes choice
             core.setOutput('jobOutcomes', '{"cancelled":"failure","failure":"failure","success":"success"}')
             //!js
@@ -90,7 +80,7 @@ jobs:
   deploy:
     name: Apply
     needs: [pre]
-    runs-on: ${{ fromJSON(needs.pre.outputs.runs-on) }}
+    runs-on: [self-hosted, deployer, '${{ needs.pre.outputs.runner }}']
     container:
       image: dysnix/kubectl:v1.20-gcloud
 
@@ -115,17 +105,23 @@ jobs:
         with:
           cmd: yq eval -o=j '.envToProject' .github/config.yaml
       -
-        name: Info
+        name: Deployment Info
         run: |
           echo "==> Environment: $environment"
           echo "==> Selectors: ${selector%,}"
           echo "==> Image Tag: $IMAGE_TAG"
-          echo
-          pwd
-          ls -la
+      -
+        uses: chrnorm/deployment-action@releases/v1
+        name: Create GitHub deployment
+        id: deployment
+        if: env.environment != ''
+        with:
+          token: ${{ github.token }}
+          environment: ${{ env.environment }}
       -
         name: Helmfile Apply
-        # if: env.environment != ''
+        id: deploy
+        if: env.environment != '' && inputs.deploy
         env:
           project_id: ${{ fromJson(steps.envToProject.outputs.result)[env.environment] }}
 
@@ -136,3 +132,11 @@ jobs:
 
           echo UPDATE_REPOS=y helmfile -e $environment repos
           echo helmfile -e $environment -l ${selector%,} apply --concurrency ${{ inputs.concurrency }}
+      -
+        if: always() && env.environment != '' && inputs.deploy
+        name: Update deployment status
+        uses: chrnorm/deployment-status@releases/v1
+        with:
+          token: ${{ github.token }}
+          state: ${{ fromJSON(needs.setup.outputs.jobOutcomes)[job.status] }}
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
