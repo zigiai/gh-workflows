@@ -28,8 +28,13 @@ on:
         default: ubuntu-latest
         required: false
         type: string
+      helm-infra-ref:
+        description: Specifies helm-infra ref
+        default: master
+        required: false
+        type: string
     secrets:
-      token:
+      helm-infra-token:
         description: GitHub token to clone helm-infra
         required: true
 
@@ -101,8 +106,8 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: zigiai/helm-infra
-          ref: master
-          token: ${{ secrets.token }}
+          ref: ${{ inputs.helm-infra-ref }}
+          token: ${{ secrets.helm-infra-token }}
       -
         name: Map Environment to Project ID
         id: envToProject
