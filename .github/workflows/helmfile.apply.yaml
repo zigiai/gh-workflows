@@ -2,13 +2,17 @@ name: Helmfile Deploy
 on:
   workflow_call:
     inputs:
-      repository:
-        description: Docker repository name (ex. organization)
-        required: false
-        type: string
       release:
-        description: Helmfile release name to deploy (equal github repository name by default)
-        required: false
+        description: Helmfile release name to deploy
+        required: true
+        type: string
+      environment:
+        description: Deploy environment (i.e. helmfile evironment)
+        required: true
+        type: string
+      runner:
+        description: Specifies the deploy runner tag
+        required: true
         type: string
       tag:
         description: Helmfile release tag to deploy
@@ -34,59 +38,29 @@ on:
         required: true
 
 jobs:
-  pre:
-    name: Prepare
-    runs-on: [self-hosted, stage]
-    outputs:
-      release: ${{ steps.set.outputs.release }}
-      self-hosted: ${{ steps.set.outputs.push }}
-      jobOutcomes: ${{ steps.set.outputs.jobOutcomes }}
-      environment: ${{ steps.envmap.outputs.environment }}
-      runner: ${{ steps.envmap.outputs.runner }}
+  deploy:
+    name: Apply
+    runs-on: [self-hosted, deployer, '${{ inputs.runner }}']
+    container:
+      image: dysnix/kubectl:v1.20-gcloud
+
+    env:
+      # github actions secret (w/ kubeconfig)
+      secret: zigiai-${{ inputs.environment }}-infra-github-actions
+      environment: ${{ inputs.environment }}
+      selector: name=${{ inputs.release }},${{ inputs.labels }}
+      IMAGE_TAG: ${{ inputs.tag }}
 
     steps:
-      -
-        name: Map runtime environment data
-        id: envmap
-        uses: kanga333/variable-mapper@master
-        with:
-          key: ${{ github.ref }}
-          export_to: output
-          mode: overwrite
-          map: |
-            {
-              ".*": { "runner": "stage" },
-              "^refs/heads/development$": { "environment": "stage" },
-              "^refs/tags/v[0-9]+.[0-9]+.[0-9]+(-.*)?$": { "environment": "prod", "runner": "prod" }
-            }
       -
         uses: actions/github-script@v5
         id: set
         with:
           script: |
             //js
-            const releaseName = '${{ inputs.release || github.event.repository.name }}'.toLowerCase()
-            core.setOutput('release', releaseName)
-
             // job outcomes choice
             core.setOutput('jobOutcomes', '{"cancelled":"failure","failure":"failure","success":"success"}')
             //!js
-
-  deploy:
-    name: Apply
-    needs: [pre]
-    runs-on: [self-hosted, deployer, '${{ needs.pre.outputs.runner }}']
-    container:
-      image: dysnix/kubectl:v1.20-gcloud
-
-    env:
-      # github actions secret (w/ kubeconfig)
-      secret: zigiai-${{ needs.pre.outputs.environment }}-infra-github-actions
-      environment: ${{ needs.pre.outputs.environment }}
-      selector: name=${{ needs.pre.outputs.release }},${{ inputs.labels }}
-      IMAGE_TAG: ${{ inputs.tag }}
-
-    steps:
       -
         uses: actions/checkout@v2
         with:
@@ -133,5 +107,5 @@ jobs:
         uses: chrnorm/deployment-status@releases/v1
         with:
           token: ${{ github.token }}
-          state: ${{ fromJSON(needs.setup.outputs.jobOutcomes)[job.status] }}
+          state: ${{ fromJSON(steps.set.outputs.jobOutcomes)[job.status] }}
           deployment_id: ${{ steps.deployment.outputs.deployment_id }}

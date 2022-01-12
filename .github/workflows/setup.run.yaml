@@ -1,0 +1,74 @@
+name: Setup 
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: Overrides the release name (equals github repository name by default)
+        required: false
+        type: string
+      force-stage-deploy:
+        description: Force deployment to stage environment
+        required: false
+        default: false
+        type: boolean
+
+    outputs:
+      release-name:
+        description: Release name
+        value: ${{ jobs.run.outputs.release }}
+      environment:
+        description: Environment to deploy
+        value: ${{ jobs.run.outputs.environment }}
+      deploy-runner:
+        description: Specifies a runner tag to perform deployment on
+        value: ${{ jobs.run.outputs.deploy-runner }}
+      deploy:
+        description: Specifies whether the deploy should be carried out
+        value: ${{ jobs.run.outputs.deploy }}
+
+jobs:
+  run:
+    name: Run
+    runs-on: ubuntu-latest
+
+    outputs:
+      release: ${{ steps.setup.outputs.release }}
+      environment: ${{ steps.setup.outputs.environment }}
+      deploy-runner: ${{ steps.setup.outputs.deploy-runner }}
+      deploy: ${{ steps.setup.outputs.deploy }}
+
+    steps:
+      -
+        name: Map runtime environment data
+        id: envmap
+        uses: kanga333/variable-mapper@master
+        with:
+          key: ${{ github.ref }}
+          export_to: output
+          mode: overwrite
+          map: |
+            {
+              ".*": { "runner": "stage" },
+              "^refs/heads/development$": { "environment": "stage", "deploy": "true" },
+              "^refs/tags/v[0-9]+.[0-9]+.[0-9]+(-.*)?$": { "environment": "prod", "runner": "prod", "deploy": "true" }
+            }
+      -
+        uses: actions/github-script@v5
+        id: setup
+        with:
+          script: |
+            //js
+            const releaseName = '${{ inputs.release || github.event.repository.name }}'.toLowerCase()
+            core.setOutput('release', releaseName)
+
+            let deployRunner = '${{ steps.envmap.outputs.runner }}'
+            let environment = '${{ steps.envmap.outputs.environment }}'
+            let deploy = '${{ steps.envmap.outputs.deploy }}'
+            if ( '${{ inputs.force-stage-deploy }}' == 'true' ) {
+              deployRunner = 'stage'
+              environment = 'stage'
+              deploy = 'true'
+            }
+            core.setOutput('deploy-runner', deployRunner)
+            core.setOutput('environment', environment)
+            core.setOutput('deploy', deploy)
