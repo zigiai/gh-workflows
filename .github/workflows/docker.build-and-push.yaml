@@ -80,6 +80,9 @@ on:
       published:
         description: Specifies whether docker image has been published on the registry
         value: ${{ jobs.build.outputs.published }}
+      latest:
+        description: Specifies the tag version is the latest one
+        value: ${{ jobs.build.outputs.latest }}
 
 jobs:
   pre:
@@ -94,9 +97,20 @@ jobs:
       runs-on: ${{ steps.set.outputs.runs-on }}
       cache-from: ${{ steps.set.outputs.cache-from }}
       cache-to: ${{ steps.set.outputs.cache-to }}
+      latest: ${{ steps.set.outputs.latest }}
+      auto-latest: ${{ steps.set.outputs.auto-latest }}
 
     steps:
-      - uses: actions/github-script@v5
+      -
+        if: inputs.auto-latest
+        id: latest
+        uses: dysnix/find-latest-tag@v1
+        with:
+          regex: '^v\d'
+          compared-to-tag: ${{ github.ref }}
+          repository: ${{ github.repository }}
+      -
+        uses: actions/github-script@v5
         id: set
         with:
           script: |
@@ -144,6 +158,13 @@ jobs:
               core.setOutput('cache-from', 'type=local,src=/tmp/.buildx-cache')
               core.setOutput('cache-to', 'type=local,src=/tmp/.buildx-cache-new')
             }
+
+            // latest
+            let latest = "${{ steps.latest.outputs.newer == 'true' || steps.latest.outputs.equal == 'true' }}"
+            core.setOutput('latest', latest)
+            if ( '${{ inputs.auto-latest }}' == 'true' ) {
+              core.setOutput('auto-latest', `latest=${latest}`)
+            }
             //!js
 
   build:
@@ -159,21 +180,14 @@ jobs:
       -
         uses: actions/checkout@v2
       -
-        if: inputs.auto-latest
-        id: latest
-        uses: dysnix/find-latest-tag@v1
-        with:
-          regex: '^v\d'
-          compared-to-tag: ${{ github.ref }}
-          repository: ${{ github.repository }}
-      -
         id: meta
         name: Docker meta
         uses: docker/metadata-action@v3
         with:
           images: ${{ needs.pre.outputs.image }}
+          # specify latest tag when auto-latest enabled
           flavor: |
-            latest=${{ steps.latest.outputs.newer == 'true' || steps.latest.outputs.equal == 'true' }}
+            ${{ needs.pre.outputs.auto-latest }}
           tags: |
             type=ref,event=tag
             type=ref,event=branch
@@ -227,6 +241,7 @@ jobs:
             let published = "${{ steps.build.outcome == 'success' && needs.pre.outputs.push == 'true' }}"
             core.setOutput('published', published)
             core.info(`🏁 published == ${published}`)
+            core.info(`🏁 latest == ${{ needs.pre.outputs.latest }}`)
       -
         # Temp fix
         # https://github.com/docker/build-push-action/issues/252
