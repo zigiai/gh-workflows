@@ -49,8 +49,13 @@ jobs:
           map: |
             {
               ".*": { "runner": "stage" },
-              "^refs/heads/development$": { "environment": "stage", "deploy": "true" },
-              "^refs/tags/v[0-9]+.[0-9]+.[0-9]+(-.*)?$": { "environment": "prod", "runner": "prod", "deploy": "true" }
+              "^refs/heads/development$": {
+                "environment": "stage"
+              },
+              "^refs/tags/v[0-9]+.[0-9]+.[0-9]+(-.*)?$": {
+                "environment": "prod",
+                "runner": "prod"
+              }
             }
       -
         uses: actions/github-script@v5
@@ -63,7 +68,9 @@ jobs:
 
             let deployRunner = '${{ steps.envmap.outputs.runner }}'
             let environment = '${{ steps.envmap.outputs.environment }}'
-            let deploy = '${{ steps.envmap.outputs.deploy }}'
+
+            // for a non-empty environment selector set deploy to true
+            let deploy = "${{ steps.envmap.outputs.environment != '' }}"
             if ( '${{ inputs.force-stage-deploy }}' == 'true' ) {
               deployRunner = 'stage'
               environment = 'stage'
