@@ -1,0 +1,137 @@
+name: Helmfile Deploy
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: Docker repository name (ex. organization)
+        required: false
+        type: string
+      release:
+        description: Helmfile release name to deploy (equal github repository name by default)
+        required: false
+        type: string
+      tag:
+        description: Helmfile release tag to deploy
+        required: true
+        type: string
+      labels:
+        description: Helmfile additional label selectors
+        required: false
+        type: string
+      concurrency:
+        description: Process the given number of simultaneous release at a time (scoped by a single helmfile)
+        required: false
+        default: 20
+        type: number
+      helm-infra-ref:
+        description: Specifies helm-infra ref
+        default: master
+        required: false
+        type: string
+    secrets:
+      helm-infra-token:
+        description: GitHub token to clone helm-infra
+        required: true
+
+jobs:
+  pre:
+    name: Prepare
+    runs-on: [self-hosted, stage]
+    outputs:
+      release: ${{ steps.set.outputs.release }}
+      self-hosted: ${{ steps.set.outputs.push }}
+      jobOutcomes: ${{ steps.set.outputs.jobOutcomes }}
+      environment: ${{ steps.envmap.outputs.environment }}
+      runner: ${{ steps.envmap.outputs.runner }}
+
+    steps:
+      -
+        name: Map runtime environment data
+        id: envmap
+        uses: kanga333/variable-mapper@master
+        with:
+          key: ${{ github.ref }}
+          export_to: output
+          mode: overwrite
+          map: |
+            {
+              ".*": { "runner": "stage" },
+              "^refs/heads/development$": { "environment": "stage" },
+              "^refs/tags/v[0-9]+.[0-9]+.[0-9]+(-.*)?$": { "environment": "prod", "runner": "prod" }
+            }
+      -
+        uses: actions/github-script@v5
+        id: set
+        with:
+          script: |
+            //js
+            const releaseName = '${{ inputs.release || github.event.repository.name }}'.toLowerCase()
+            core.setOutput('release', releaseName)
+
+            // job outcomes choice
+            core.setOutput('jobOutcomes', '{"cancelled":"failure","failure":"failure","success":"success"}')
+            //!js
+
+  deploy:
+    name: Apply
+    needs: [pre]
+    runs-on: [self-hosted, deployer, '${{ needs.pre.outputs.runner }}']
+    container:
+      image: dysnix/kubectl:v1.20-gcloud
+
+    env:
+      # github actions secret (w/ kubeconfig)
+      secret: zigiai-${{ needs.pre.outputs.environment }}-infra-github-actions
+      environment: ${{ needs.pre.outputs.environment }}
+      selector: name=${{ needs.pre.outputs.release }},${{ inputs.labels }}
+      IMAGE_TAG: ${{ inputs.tag }}
+
+    steps:
+      -
+        uses: actions/checkout@v2
+        with:
+          repository: zigiai/helm-infra
+          ref: ${{ inputs.helm-infra-ref }}
+          token: ${{ secrets.helm-infra-token }}
+      -
+        name: Map Environment to Project ID
+        id: envToProject
+        uses: mikefarah/yq@master
+        with:
+          cmd: yq eval -o=j '.envToProject' .github/config.yaml
+      -
+        name: Deployment Info
+        run: |
+          echo "==> Environment: $environment"
+          echo "==> Selectors: ${selector%,}"
+          echo "==> Image Tag: $IMAGE_TAG"
+      -
+        uses: chrnorm/deployment-action@releases/v1
+        name: Create GitHub deployment
+        id: deployment
+        if: env.environment != ''
+        with:
+          token: ${{ github.token }}
+          environment: ${{ env.environment }}
+      -
+        name: Helmfile Apply
+        id: deploy
+        if: env.environment != ''
+        env:
+          project_id: ${{ fromJson(steps.envToProject.outputs.result)[env.environment] }}
+
+        run: |
+          ## setup ~/.kube/config
+          ## Helmfile environment corresponds to the cluster in the secret! (ex clusters.stage etc)
+          ./scripts/fetch-kubeconfig $secret $environment $project_id
+
+          UPDATE_REPOS=y helmfile -e $environment repos
+          helmfile -e $environment -l ${selector%,} apply --concurrency ${{ inputs.concurrency }}
+      -
+        if: always() && env.environment != ''
+        name: Update deployment status
+        uses: chrnorm/deployment-status@releases/v1
+        with:
+          token: ${{ github.token }}
+          state: ${{ fromJSON(needs.setup.outputs.jobOutcomes)[job.status] }}
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
