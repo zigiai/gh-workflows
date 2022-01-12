@@ -98,7 +98,6 @@ jobs:
       cache-from: ${{ steps.set.outputs.cache-from }}
       cache-to: ${{ steps.set.outputs.cache-to }}
       latest: ${{ steps.set.outputs.latest }}
-      auto-latest: ${{ steps.set.outputs.auto-latest }}
 
     steps:
       -
@@ -162,9 +161,6 @@ jobs:
             // latest
             let latest = "${{ steps.latest.outputs.newer == 'true' || steps.latest.outputs.equal == 'true' }}"
             core.setOutput('latest', latest)
-            if ( '${{ inputs.auto-latest }}' == 'true' ) {
-              core.setOutput('auto-latest', `latest=${latest}`)
-            }
             //!js
 
   build:
@@ -185,12 +181,11 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: ${{ needs.pre.outputs.image }}
-          # specify latest tag when auto-latest enabled
-          flavor: |
-            ${{ needs.pre.outputs.auto-latest }}
+          ## latest specified automatically when auto-latest enabled
           tags: |
             type=ref,event=tag
-            type=ref,event=branch
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ needs.pre.outputs.latest == 'true' && inputs.auto-latest }}
       -
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
