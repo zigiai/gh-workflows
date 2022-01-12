@@ -92,6 +92,9 @@ jobs:
       push: ${{ steps.set.outputs.push }}
       self-hosted: ${{ steps.set.outputs.push }}
       runs-on: ${{ steps.set.outputs.runs-on }}
+      cache-from: ${{ steps.set.outputs.cache-from }}
+      cache-to: ${{ steps.set.outputs.cache-to }}
+
     steps:
       - uses: actions/github-script@v5
         id: set
@@ -134,6 +137,12 @@ jobs:
               core.setOutput('username', '_json_key')
             } else {
               core.setOutput('username', '${{ inputs.username }}')
+            }
+
+            // specify cache directories
+            if ('${{ inputs.cache }}' == 'true') {
+              core.setOutput('cache-from', 'type=local,src=/tmp/.buildx-cache')
+              core.setOutput('cache-to', 'type=local,src=/tmp/.buildx-cache-new')
             }
             //!js
 
@@ -204,8 +213,8 @@ jobs:
           labels: |
             ${{ steps.meta.outputs.labels }}
             ${{ inputs.labels }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new
+          cache-from: ${{ needs.pre.outputs.cache-from }}
+          cache-to: ${{ needs.pre.outputs.cache-to }}
           secrets: ${{ secrets.secrets }}
           secret-files: ${{ inputs.secrets }}
       -
