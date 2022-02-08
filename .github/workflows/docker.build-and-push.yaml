@@ -188,14 +188,13 @@ jobs:
   build:
     name: Build and Push
     needs: [setup]
-    runs-on: ${{ fromJSON(needs.pre.outputs.runs-on) }}
+    runs-on: ${{ fromJSON(needs.setup.outputs.runs-on) }}
 
     outputs:
       version: ${{ steps.meta.outputs.version }}
       published: ${{ steps.details.outputs.published }}
 
     steps:
-      - run: echo "${{ fromJSON(needs.setup.outputs.runs-on) }}"
       -
         uses: actions/checkout@v2
       -
