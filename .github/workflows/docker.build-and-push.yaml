@@ -29,9 +29,9 @@ on:
         required: false
         type: boolean
       push-on-tags:
-        description: Push the image on a tag push
+        description: Auto-push image on tags (refs/tags/)
         required: false
-        default: true
+        default: false
         type: boolean
       push:
         description: Set to true/false to control push unconditionally
