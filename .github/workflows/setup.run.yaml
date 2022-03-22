@@ -6,11 +6,11 @@ on:
         description: Overrides the release name (equals github repository name by default)
         required: false
         type: string
-      force-stage-deploy:
-        description: Force deployment to stage environment
-        required: false
-        default: false
-        type: boolean
+      # force-stage-deploy:
+      #   description: Force deployment to stage environment
+      #   required: false
+      #   default: false
+      #   type: boolean
 
     outputs:
       release-name:
@@ -25,9 +25,6 @@ on:
       deploy:
         description: Specifies whether the deploy should be carried out
         value: ${{ jobs.run.outputs.deploy }}
-      default-branch:
-        description: Specifies whether the run is on the default branch
-        value: ${{ jobs.run.outputs.default-branch }}
 
 jobs:
   run:
@@ -39,7 +36,6 @@ jobs:
       environment: ${{ steps.setup.outputs.environment }}
       deploy-runner: ${{ steps.setup.outputs.deploy-runner }}
       deploy: ${{ steps.setup.outputs.deploy }}
-      default-branch: ${{ steps.setup.outputs.default-branch }}
 
     steps:
       -
@@ -62,29 +58,31 @@ jobs:
               }
             }
       -
+        uses: actions/checkout@v2
+      -
+        name: Check the default branch has head
+        id: git
+        run: |
+          HAS_HEAD=false
+          if ( git branch --contains HEAD | grep -q '${{ github.event.repository.default_branch }}' ); then
+            HAS_HEAD=true
+          fi
+          echo "::set-output name=has-head::${HAS_HEAD}"
+      -
         uses: actions/github-script@v5
         id: setup
         with:
           script: |
             //js
-            const util = require('util');
             const releaseName = '${{ inputs.release || github.event.repository.name }}'.toLowerCase()
             core.setOutput('release', releaseName)
 
             let deployRunner = '${{ steps.envmap.outputs.runner }}'
             let environment = '${{ steps.envmap.outputs.environment }}'
-
-            // for a non-empty environment selector set deploy to true
-            let deploy = "${{ steps.envmap.outputs.environment != '' }}"
-            let default_branch = '${{ github.ref }}' == util.format('refs/heads/%s', '${{ github.event.repository.default_branch }}')
-
-            if ( '${{ inputs.force-stage-deploy }}' == 'true' ) {
-              deployRunner = 'stage'
-              environment = 'stage'
-              deploy = 'true'
-            }
+            let hasEnvironment = "${{ steps.envmap.outputs.environment != '' }}"
 
             core.setOutput('deploy-runner', deployRunner)
             core.setOutput('environment', environment)
-            core.setOutput('deploy', deploy)
-            core.setOutput('default-branch', default_branch)
+            // !NB: allow deployment only if the default branch contains the head reference (practically is merged or pushed)
+            core.setOutput('deploy', hasEnvironment && '${{ steps.git.outputs.has-head }}' == 'true')
+            //!js

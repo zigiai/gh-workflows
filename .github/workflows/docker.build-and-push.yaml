@@ -31,7 +31,12 @@ on:
       push-on-tags:
         description: Auto-push image on tags (refs/tags/)
         required: false
-        default: false
+        default: true
+        type: boolean
+      push-on-default:
+        description: Auto-push image on the default branch
+        required: false
+        default: true
         type: boolean
       push:
         description: Set to true/false to control push unconditionally
@@ -124,14 +129,19 @@ jobs:
         with:
           script: |
             //js
+            const util = require('util');
+            const isDefaultBranch = '${{ github.ref }}' == util.format('refs/heads/%s', '${{ github.event.repository.default_branch }}')
+
             const imageRepo = '${{ github.event.repository.owner.login }}'.toLowerCase()
             const imageName = '${{ github.event.repository.name }}'.toLowerCase().replace(/^docker-/, '')
             const repoPaths = '${{ inputs.repository }}'.split('/')
+            // push is a string, if given is a non-empty value
             const pushGiven = "${{ inputs.push }}".toLowerCase()
             const pushOnTags = "${{ inputs.push-on-tags && startsWith(github.ref, 'refs/tags/')}}" == 'true'
+            const pushOnDefault = '${{ inputs.push-on-default }}' == 'true' && isDefaultBranch == 'true'
 
             // Push on tags (and push is not specifically set to false) or always push (push == 'true')
-            if (pushOnTags && pushGiven != 'false' || pushGiven == 'true') {
+            if (pushGiven == '' && (pushOnTags || pushOnDefault) || pushGiven == 'true') {
               core.setOutput('push', 'true')
             }
 
