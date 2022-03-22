@@ -25,6 +25,9 @@ on:
       deploy:
         description: Specifies whether the deploy should be carried out
         value: ${{ jobs.run.outputs.deploy }}
+      default-branch:
+        description: Specifies whether the run is on the default branch
+        value: ${{ jobs.run.outputs.default-branch }}
 
 jobs:
   run:
@@ -36,6 +39,7 @@ jobs:
       environment: ${{ steps.setup.outputs.environment }}
       deploy-runner: ${{ steps.setup.outputs.deploy-runner }}
       deploy: ${{ steps.setup.outputs.deploy }}
+      default-branch: ${{ steps.setup.outputs.default-branch }}
 
     steps:
       -
@@ -63,6 +67,7 @@ jobs:
         with:
           script: |
             //js
+            const util = require('util');
             const releaseName = '${{ inputs.release || github.event.repository.name }}'.toLowerCase()
             core.setOutput('release', releaseName)
 
@@ -71,11 +76,15 @@ jobs:
 
             // for a non-empty environment selector set deploy to true
             let deploy = "${{ steps.envmap.outputs.environment != '' }}"
+            let default_branch = '${{ github.ref }}' == util.format('refs/heads/%s', '${{ github.event.repository.default_branch }}')
+
             if ( '${{ inputs.force-stage-deploy }}' == 'true' ) {
               deployRunner = 'stage'
               environment = 'stage'
               deploy = 'true'
             }
+
             core.setOutput('deploy-runner', deployRunner)
             core.setOutput('environment', environment)
             core.setOutput('deploy', deploy)
+            core.setOutput('default-branch', default_branch)
