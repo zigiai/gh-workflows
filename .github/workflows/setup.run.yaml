@@ -53,7 +53,8 @@ jobs:
             {
               ".*": { "runner": "stage" },
               "^refs/heads/development$": {
-                "environment": "stage"
+                "environment": "stage",
+                "defaultBranch": "true"
               },
               "^refs/tags/v[0-9]+.[0-9]+.[0-9]+(-.*)?$": {
                 "environment": "prod",
@@ -86,6 +87,7 @@ jobs:
             let deployRunner = '${{ steps.envmap.outputs.runner }}'
             let environment = '${{ steps.envmap.outputs.environment }}'
             let hasEnvironment = '${{ steps.envmap.outputs.environment }}' != ''
+            let defaultBranch = '${{ steps.envmap.outputs.defaultBranch }}' == 'true'
             let deploy = false
 
             if (hasEnvironment) {
