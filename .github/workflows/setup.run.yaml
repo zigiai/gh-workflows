@@ -6,11 +6,11 @@ on:
         description: Overrides the release name (equals github repository name by default)
         required: false
         type: string
-      # force-stage-deploy:
-      #   description: Force deployment to stage environment
-      #   required: false
-      #   default: false
-      #   type: boolean
+      force-stage-deploy:
+        description: Force deployment to stage environment
+        required: false
+        default: false
+        type: boolean
 
     outputs:
       release-name:
@@ -25,6 +25,9 @@ on:
       deploy:
         description: Specifies whether the deploy should be carried out
         value: ${{ jobs.run.outputs.deploy }}
+
+env:
+  MAIN_BRANCH: master
 
 jobs:
   run:
@@ -59,30 +62,46 @@ jobs:
             }
       -
         uses: actions/checkout@v2
+        with:
+          ref: ${{ env.MAIN_BRANCH }}
+          fetch-depth: '0'
       -
         name: Check the default branch has head
         id: git
         run: |
-          HAS_HEAD=false
-          if ( git branch --contains HEAD | grep -q '${{ github.event.repository.default_branch }}' ); then
-            HAS_HEAD=true
+          MERGED_TO_MAIN=false
+          if ( git branch --contains $GITHUB_SHA | grep -q "\b${MAIN_BRANCH}$" ); then
+            MERGED_TO_MAIN=true
           fi
-          echo "::set-output name=has-head::${HAS_HEAD}"
+          echo "::set-output name=merged-to-main::${MERGED_TO_MAIN}"
       -
         uses: actions/github-script@v5
         id: setup
         with:
           script: |
-            //js
+            // js
             const releaseName = '${{ inputs.release || github.event.repository.name }}'.toLowerCase()
             core.setOutput('release', releaseName)
 
             let deployRunner = '${{ steps.envmap.outputs.runner }}'
             let environment = '${{ steps.envmap.outputs.environment }}'
-            let hasEnvironment = "${{ steps.envmap.outputs.environment != '' }}"
+            let hasEnvironment = '${{ steps.envmap.outputs.environment }}' != ''
+            let deploy = false
+
+            if (hasEnvironment) {
+              if (defaultBranch) { deploy = true }
+              // Allow deployment of tags only when the HEAD is merged into master
+              if ('${{ steps.git.outputs.merged-to-main }}' == 'true') { deploy = true }
+            }
+
+            // Forceful stage deployment, i.e. will deploy to stage regardless the ref/branch
+            if ('${{ inputs.force-stage-deploy }}' == 'true') {
+              environment = 'stage'
+              deployRunner = 'stage'
+              deploy = 'true'
+            }
 
             core.setOutput('deploy-runner', deployRunner)
             core.setOutput('environment', environment)
-            // !NB: allow deployment only if the default branch contains the head reference (practically is merged or pushed)
-            core.setOutput('deploy', hasEnvironment && '${{ steps.git.outputs.has-head }}' == 'true')
-            //!js
+            core.setOutput('deploy', deploy)
+            // !js

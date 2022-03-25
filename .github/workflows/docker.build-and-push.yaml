@@ -114,6 +114,7 @@ jobs:
       cache-to: ${{ steps.set.outputs.cache-to }}
       latest: ${{ steps.set.outputs.latest }}
       metadata-version: ${{ steps.set.outputs.metadata-version }}
+
     steps:
       -
         if: inputs.auto-latest
@@ -128,7 +129,7 @@ jobs:
         id: set
         with:
           script: |
-            //js
+            // js
             const util = require('util');
             const isDefaultBranch = '${{ github.ref }}' == util.format('refs/heads/%s', '${{ github.event.repository.default_branch }}')
 
@@ -141,7 +142,7 @@ jobs:
             const pushOnDefault = '${{ inputs.push-on-default }}' == 'true' && isDefaultBranch == 'true'
 
             // Push on tags (and push is not specifically set to false) or always push (push == 'true')
-            if (pushGiven == '' && (pushOnTags || pushOnDefault) || pushGiven == 'true') {
+            if (pushGiven == 'true' || (pushGiven == '' && (pushOnTags || pushOnDefault))) {
               core.setOutput('push', 'true')
             }
 
@@ -193,7 +194,7 @@ jobs:
             // found latest tag equals current github.ref, i.e. the latest version
             let latest = "${{ steps.current-tag.outputs.equal == 'true' }}"
             core.setOutput('latest', latest)
-            //!js
+            // !js
 
   build:
     name: Build and Push
