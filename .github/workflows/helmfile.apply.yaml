@@ -99,8 +99,14 @@ jobs:
           ## Helmfile environment corresponds to the cluster in the secret! (ex clusters.stage etc)
           ./scripts/fetch-kubeconfig $secret $environment $project_id
 
+          ## Update repos and manually update chart dependencies (if any)
           UPDATE_REPOS=y helmfile -e $environment repos
-          helmfile -e $environment -l ${selector%,} apply --concurrency ${{ inputs.concurrency }}
+          if [ -d charts/${{ inputs.release }} ]; then
+            helm dependency update charts/${{ inputs.release }} --skip-refresh
+          fi
+
+          ## Run the deployment concurrently and skip all dependency managment
+          helmfile -e $environment -l ${selector%,} apply --concurrency ${{ inputs.concurrency }} --skip-deps
       -
         if: always() && env.environment != ''
         name: Update deployment status
