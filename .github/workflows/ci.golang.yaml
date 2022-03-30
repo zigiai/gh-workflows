@@ -1,0 +1,28 @@
+name: CI 
+on:
+  workflow_call:
+    inputs:
+      unit:
+        description: Command to run tests
+        required: false
+        type: string
+        default: 'go test ./'
+    secrets:
+      github-token:
+        description: GitHub token
+        required: true
+
+jobs:
+  unit-tests:
+    name: Unit tests
+    runs-on: ["self-hosted", "stage", "default"]
+    container:
+      image: golang:1.18-bullseye
+    steps:
+      - uses: actions/checkout@v2
+      -
+        name: Run tests
+        run: |
+          mkdir -p /run/secrets && echo '${{ secrets.github-token }}' > /run/secrets/github_token
+          . .github/scripts/git-askpass-helper
+          ${{ inputs.unit }}
