@@ -47,3 +47,24 @@ jobs:
       with:
         version: "2022.1"
         install-go: false
+
+  nancy:
+    name: Nancy
+    runs-on: ["self-hosted", "stage", "default"]
+    container:
+      image: golang:1.18-bullseye
+
+    steps:
+    - uses: actions/checkout@v2
+    -
+      name: Export GIT_ASKPASS
+      run: |
+        mkdir -p /run/secrets && echo '${{ secrets.github-token }}' > /run/secrets/github_token
+        . .github/scripts/git-askpass-helper
+        echo "GIT_ASKPASS=${GIT_ASKPASS}" >> ${GITHUB_ENV}
+    -
+      name: WriteGoList
+      run: go list -json -m all > go.list
+    -
+      name: Nancy
+      uses: sonatype-nexus-community/nancy-github-action@main
