@@ -1,4 +1,4 @@
-name: CI 
+name: Go
 on:
   workflow_call:
     inputs:
@@ -7,6 +7,16 @@ on:
         required: false
         type: string
         default: 'go test ./...'
+      gosec-enabled:
+        description: GoSec default state (when implemented allover set to true!)
+        required: false
+        type: boolean
+        default: false
+      nancy-enabled:
+        description: Nancy default state (when implemented allover set to true!)
+        required: false
+        type: boolean
+        default: false
     secrets:
       github-token:
         description: GitHub token
@@ -28,7 +38,7 @@ jobs:
           ${{ inputs.unit }}
 
   static-check:
-    name: Static check
+    name: Staticcheck
     runs-on: ["self-hosted", "stage", "default"]
     container:
       image: golang:1.18-bullseye
@@ -43,7 +53,59 @@ jobs:
         . .github/scripts/git-askpass-helper
         echo "GIT_ASKPASS=${GIT_ASKPASS}" >> ${GITHUB_ENV}
     -
+      name: Staticcheck
       uses: dominikh/staticcheck-action@v1.2.0
       with:
         version: "2022.1"
         install-go: false
+
+  nancy:
+    name: Nancy
+    runs-on: ["self-hosted", "stage", "default"]
+    container:
+      image: golang:1.18-bullseye
+
+    steps:
+    - uses: actions/checkout@v2
+      if: inputs.nancy-enabled
+    -
+      name: Export GIT_ASKPASS
+      if: inputs.nancy-enabled
+      run: |
+        mkdir -p /run/secrets && echo '${{ secrets.github-token }}' > /run/secrets/github_token
+        . .github/scripts/git-askpass-helper
+        echo "GIT_ASKPASS=${GIT_ASKPASS}" >> ${GITHUB_ENV}
+    -
+      name: WriteGoList
+      if: inputs.nancy-enabled
+      run: go list -json -m all > go.list
+    -
+      name: Nancy
+      if: inputs.nancy-enabled
+      uses: sonatype-nexus-community/nancy-github-action@main
+
+  gosec:
+    name: Sec Scan
+    runs-on: ["self-hosted", "stage", "default"]
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    container:
+      image: golang:1.18-bullseye
+    steps:
+      - uses: actions/checkout@v2
+        if: inputs.gosec-enabled
+      -
+        name: Export GIT_ASKPASS
+        if: inputs.gosec-enabled
+        run: |
+          mkdir -p /run/secrets && echo '${{ secrets.github-token }}' > /run/secrets/github_token
+          . .github/scripts/git-askpass-helper
+          echo "GIT_ASKPASS=${GIT_ASKPASS}" >> ${GITHUB_ENV}
+      -
+        name: Run Gosec Security Scanner
+        if: inputs.gosec-enabled
+        run: |
+          curl -sfL https://raw.githubusercontent.com/securego/gosec/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.11.0
+          gosec ./...
