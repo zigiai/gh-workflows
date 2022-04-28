@@ -7,9 +7,13 @@ on:
         required: false
         type: string
         default: 'go test ./...'
-
       gosec-enabled:
-        description: Default state (when implemented allover set to true!)
+        description: GoSec default state (when implemented allover set to true!)
+        required: false
+        type: boolean
+        default: false
+      nancy-enabled:
+        description: Nancy default state (when implemented allover set to true!)
         required: false
         type: boolean
         default: false
@@ -63,21 +67,25 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      if: inputs.nancy-enabled
     -
       name: Export GIT_ASKPASS
+      if: inputs.nancy-enabled
       run: |
         mkdir -p /run/secrets && echo '${{ secrets.github-token }}' > /run/secrets/github_token
         . .github/scripts/git-askpass-helper
         echo "GIT_ASKPASS=${GIT_ASKPASS}" >> ${GITHUB_ENV}
     -
       name: WriteGoList
+      if: inputs.nancy-enabled
       run: go list -json -m all > go.list
     -
       name: Nancy
+      if: inputs.nancy-enabled
       uses: sonatype-nexus-community/nancy-github-action@main
 
   gosec:
-    name: Go Sec Scan
+    name: Sec Scan
     runs-on: ["self-hosted", "stage", "default"]
     permissions:
       security-events: write
