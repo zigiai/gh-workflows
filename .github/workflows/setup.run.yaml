@@ -74,6 +74,7 @@ jobs:
           if ( git branch --contains $GITHUB_SHA | grep -q "\b${MAIN_BRANCH}$" ); then
             MERGED_TO_MAIN=true
           fi
+          echo "🏁 merged-to-main == ${MERGED_TO_MAIN}"
           echo "::set-output name=merged-to-main::${MERGED_TO_MAIN}"
       -
         uses: actions/github-script@v5
