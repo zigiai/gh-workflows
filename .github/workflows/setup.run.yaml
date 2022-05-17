@@ -73,6 +73,9 @@ jobs:
           MERGED_TO_MAIN=false
           if ( git branch --contains $GITHUB_SHA | grep -q "\b${MAIN_BRANCH}$" ); then
             MERGED_TO_MAIN=true
+          elif [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            >&2 echo "::error ::Releases unmerged into main the branch are prohibited"
+            exit 1
           fi
           echo "🏁 merged-to-main == ${MERGED_TO_MAIN}"
           echo "::set-output name=merged-to-main::${MERGED_TO_MAIN}"
