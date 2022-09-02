@@ -28,6 +28,8 @@ on:
 
 env:
   MAIN_BRANCH: master
+  POETRY_CACHE_DIR: ${{ github.workspace }}/.poetry_cache
+
 
 jobs:
   run:
