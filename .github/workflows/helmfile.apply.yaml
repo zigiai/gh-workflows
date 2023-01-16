@@ -113,7 +113,7 @@ jobs:
           ## Detect app chart
           chart=$(helmfile -e $environment -l ${selector%,} list --output json | jq -r '.[0].chart')
           if [ "$chart" ==  "../../charts/app" ]; then
-            helm dependency update charts/app --skip-refresh
+            helm dependency build charts/app --skip-refresh
           fi
 
           ## Deprecate
