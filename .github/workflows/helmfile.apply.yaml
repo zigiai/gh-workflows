@@ -63,14 +63,14 @@ jobs:
             //!js
       -
         uses: actions/checkout@v2
-        if: env.environment == prod
+        if: env.environment == 'prod'
         with:
           repository: zigiai/helm-infra
           ref: ${{ inputs.helm-infra-ref }}
           token: ${{ secrets.helm-infra-token }}
       -
         uses: actions/checkout@v2
-        if: env.environment == stage
+        if: env.environment == 'stage'
         with:
           repository: zigiai/helm-infra
           ref: OPS-47-develop-new-multipurpose-lib-chart-evolution-from-dysnix-app-and-dysnix-base
