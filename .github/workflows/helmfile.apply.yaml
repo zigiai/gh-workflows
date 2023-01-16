@@ -109,6 +109,14 @@ jobs:
 
           ## Update repos and manually update chart dependencies (if any)
           UPDATE_REPOS=y helmfile -e $environment repos
+
+          ## Detect app chart
+          chart=$(helmfile -e $environment -l ${selector%,} list --output json | jq -r '.[0].chart')
+          if [ "$chart" ==  "../../charts/app" ]; then
+            helm dependency update charts/app --skip-refresh
+          fi
+
+          ## Deprecate
           if [ -d charts/${{ inputs.release }} ]; then
             helm dependency update charts/${{ inputs.release }} --skip-refresh
           fi
